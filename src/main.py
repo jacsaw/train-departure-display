@@ -214,7 +214,7 @@ def renderPoweredBy(xOffset):
 
 def renderNRE(xOffset):
     def drawText(draw, *_):
-        text = "National Rail Enquiries"
+        text = "Metro North Railroads"
         draw.text((int(xOffset), 0), text=text, font=fontBold, fill="yellow")
 
     return drawText
@@ -222,7 +222,7 @@ def renderNRE(xOffset):
 
 def renderName(xOffset):
     def drawText(draw, *_):
-        text = "UK Train Departure Display"
+        text = "MetroNorth Train Time"
         draw.text((int(xOffset), 0), text=text, font=fontBold, fill="yellow")
 
     return drawText
