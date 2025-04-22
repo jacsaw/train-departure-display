@@ -6,6 +6,7 @@ import requests
 import whenever
 
 from datetime import datetime
+from datetime import time as datetime_time
 from PIL import ImageFont, Image, ImageDraw
 
 from trains import loadDeparturesForStation
@@ -38,7 +39,7 @@ def is_time_between(begin_time, end_time, check_time=None):
 
 
 def isRun(start_hour, end_hour):
-    return is_time_between(time(start_hour, 0), time(end_hour, 0))
+    return is_time_between(datetime_time(start_hour, 0), datetime_time(end_hour, 0))
 
 def makeFont(name, size):
     font_path = os.path.abspath(
