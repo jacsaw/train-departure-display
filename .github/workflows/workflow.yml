@@ -2,12 +2,14 @@ name: balenaCloud build
 
 on:
  pull_request:
-    types: [opened, synchronize, closed]
+    types: 
+      - closed
     branches:
       - main
 
 jobs:
   balena_cloud_build:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
