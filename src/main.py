@@ -1,9 +1,11 @@
+import csv
 import os
 import time
 
 import requests
+import whenever
 
-from datetime import datetime, time
+from datetime import datetime
 from PIL import ImageFont, Image, ImageDraw
 
 from trains import loadDeparturesForStation
@@ -17,7 +19,14 @@ from luma.core.sprite_system import framerate_regulator
 
 import socket, re, uuid
 
+with open("src/data/mnr/stops.txt", "r") as file:
+    reader = csv.DictReader(file)
+    stop_list = [row for row in reader]
+    STOPS = {stop["stop_id"]: stop["stop_name"] for stop in stop_list}
+
 VERSION_NUMBER = "0.1"
+WEATHER_DOT_GOV_URL = "https://forecast.weather.gov/MapClick.php?lat=41.5053&lon=-73.9654&unit=0&lg=english&FcstType=dwml"
+
 
 def is_time_between(begin_time, end_time, check_time=None):
     # If check time is not given, default to current UTC time
@@ -43,14 +52,15 @@ def makeFont(name, size):
 
 
 def renderDestination(departure, font, pos):
-    departureTime = departure["aimed_departure_time"]
-    destinationName = departure["destination_name"]
+    departureTime = whenever.ZonedDateTime.from_timestamp(departure["departure_time"], tz="America/New_York").local().time().py_time().strftime('%-I:%M %p')
+    destinationName = departure["destination"]
+
+    if "Harlem-125 St" in departure["stopping_at"]:
+        train = f"{departureTime}  {destinationName} *"
+    else:
+        train = f"{departureTime}  {destinationName}"
 
     def drawText(draw, *_):
-        if config["showDepartureNumbers"]:
-            train = f"{pos}  {departureTime}  {destinationName}"
-        else:
-            train = f"{departureTime}  {destinationName}"
         _, _, bitmap = cachedBitmapText(train, font)
         draw.bitmap((0, 0), bitmap, fill="yellow")
 
@@ -61,18 +71,12 @@ def renderServiceStatus(departure):
     def drawText(draw, width, *_):
         train = ""
 
-        if departure["expected_departure_time"] == "On time":
+        if departure["delay"] < 60:
             train = "On time"
-        elif departure["expected_departure_time"] == "Cancelled":
-            train = "Cancelled"
-        elif departure["expected_departure_time"] == "Delayed":
-            train = "Delayed"
-        else:
-            if isinstance(departure["expected_departure_time"], str):
-                train = 'Exp ' + departure["expected_departure_time"]
-
-            if departure["aimed_departure_time"] == departure["expected_departure_time"]:
-                train = "On time"
+        elif departure["delay"] > 0:
+            departure["delay"] = int(departure["delay"] / 60)
+            train = "(+ {}mins)".format(departure["delay"])
+            # train = "Delayed"
 
         w, _, bitmap = cachedBitmapText(train, font)
         draw.bitmap((width - w, 0), bitmap, fill="yellow")
@@ -80,13 +84,17 @@ def renderServiceStatus(departure):
 
 
 def renderPlatform(departure):
+
+    departureTime = whenever.ZonedDateTime.from_timestamp(departure["departure_time"], tz="America/New_York")
+
     def drawText(draw, *_):
-        if "platform" in departure:
-            platform = "Plat " + departure["platform"]
-            if departure["platform"].lower() == "bus":
-                platform = "BUS"
-            _, _, bitmap = cachedBitmapText(platform, font)
-            draw.bitmap((0, 0), bitmap, fill="yellow")
+        current_time = whenever.ZonedDateTime.now("America/New_York")
+        if departureTime.difference(current_time).in_minutes() > 0:
+            time_left = "in {} mins".format(int(departureTime.difference(current_time).in_minutes()))
+        else:
+            time_left = "Departing"
+        _, _, bitmap = cachedBitmapText(time_left, font)
+        draw.bitmap((0, 0), bitmap, fill="yellow")
     return drawText
 
 
@@ -163,15 +171,19 @@ def renderStations(stations):
 
 
 def renderTime(draw, width, *_):
-    rawTime = datetime.now().time()
-    hour, minute, second = str(rawTime).split('.')[0].split(':')
-
+    rawTime = whenever.ZonedDateTime.now("America/New_York").local().time().py_time()
+    formatted_time = rawTime.strftime('%I:%M:%S %p')
+    # rawTime = datetime.now().time()
+    hour, minute, second = formatted_time.split(':')
+    second, ampm = second.split(' ')
     w1, _, HMBitmap = cachedBitmapText("{}:{}".format(hour, minute), fontBoldLarge)
     w2, _, _ = cachedBitmapText(':00', fontBoldTall)
     _, _, SBitmap = cachedBitmapText(':{}'.format(second), fontBoldTall)
+    w3, _, AMBitmap = cachedBitmapText(ampm, fontBoldLarge)
 
-    draw.bitmap(((width - w1 - w2) / 2, 0), HMBitmap, fill="yellow")
-    draw.bitmap((((width - w1 - w2) / 2) + w1, 5), SBitmap, fill="yellow")
+    draw.bitmap(((width - w1 - w2 - w3) , 0), HMBitmap, fill="yellow")
+    draw.bitmap((((width - w2 - w3)), 5), SBitmap, fill="yellow")
+    draw.bitmap((width - w3, 0), AMBitmap, fill="yellow")
 
 def renderDebugScreen(lines):
     def drawDebug(draw, *_):
@@ -240,6 +252,12 @@ def renderDots(draw, *_):
     text = ".  .  ."
     draw.text((0, 0), text=text, font=fontBold, fill="yellow")
 
+def loadWeather():
+    # Placeholder for weather loading function
+    weather_data = requests.get(WEATHER_DOT_GOV_URL)
+
+
+    pass
 
 def loadData(apiConfig, journeyConfig, config):
     runHours = []
@@ -260,7 +278,7 @@ def loadData(apiConfig, journeyConfig, config):
         if departures is None:
             return False, False, stationName
 
-        firstDepartureDestinations = departures[0]["calling_at_list"]
+        firstDepartureDestinations = departures[0]["stopping_at"]
         return departures, firstDepartureDestinations, stationName
     except requests.RequestException as err:
         print("Error: Failed to fetch data from OpenLDBWS")
@@ -381,7 +399,7 @@ def platform_filter(departureData, platformNumber, station):
                 platformDepartures.append(res)
 
     if len(platformDepartures) > 0:
-        firstDepartureDestinations = platformDepartures[0]["calling_at_list"]
+        firstDepartureDestinations = platformDepartures[0]["stopping_at"]
         platformData = platformDepartures, firstDepartureDestinations, station
     else:
         platformData = platformDepartures, "", station
@@ -405,7 +423,7 @@ def drawSignage(device, width, height, data):
 
     # First measure the text size
     w = int(font.getlength(status))
-    pw = int(font.getlength("Plat 88"))
+    pw = int(font.getlength("Departing  "))
 
     if len(departures) == 0:
         noTrains = drawBlankSignage(device, width=width, height=height, departureStation=departureStation)
@@ -415,7 +433,7 @@ def drawSignage(device, width, height, data):
     if config['firstDepartureBold']:
         firstFont = fontBold
 
-    rowOneA = snapshot(width - w - pw - 5, 10, renderDestination(departures[0], firstFont, '1st'), interval=config["refreshTime"])
+    rowOneA = snapshot(width - w - 5, 10, renderDestination(departures[0], firstFont, '1st'), interval=config["refreshTime"])
     rowOneB = snapshot(w, 10, renderServiceStatus(departures[0]), interval=10)
     rowOneC = snapshot(pw, 10, renderPlatform(departures[0]), interval=config["refreshTime"])
     rowTwoA = snapshot(callingWidth, 10, renderCallingAt, interval=config["refreshTime"])
@@ -475,7 +493,7 @@ def getIp():
 
 
 try:
-    print('MetroNorth Train Time v' + 1)
+    print('MetroNorth Train Time v' + '1')
     config = loadConfig()
     if config['headless']:
         print('Headless mode, running main loop without serial comms')
@@ -505,7 +523,7 @@ try:
         virtual.refresh()
         time.sleep(config['debug'])
     else:
-        # display NRE attribution while data loads
+        # display Metro North attribution while data loads
         virtual = drawStartup(device, width=widgetWidth, height=widgetHeight)
         virtual.refresh()
         if config['headless'] is not True:
@@ -522,8 +540,8 @@ try:
     while True:
         with regulator:
             # isRun short utility function to take 2 times and see if the current time is between them
-            # this is used to blank the screen between certain hours
-            if len(blankHours) == 2 and isRun(blankHours[0], blankHours[1]):
+            # this is used to blank the screen between certain hours, skip the blank if debug is enabled
+            if len(blankHours) == 2 and isRun(blankHours[0], blankHours[1]) and not config['debug']:
                 device.clear()
                 time.sleep(10)
             else:
@@ -538,6 +556,7 @@ try:
                         
                     else:
                         data = loadData(config["api"], config["journey"], config)
+                        weather = loadWeather()
                         if data[0] is False:
                             virtual = drawBlankSignage(
                                 device, width=widgetWidth, height=widgetHeight, departureStation=data[2])
