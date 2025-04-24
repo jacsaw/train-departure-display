@@ -543,6 +543,8 @@ try:
             # isRun short utility function to take 2 times and see if the current time is between them
             # this is used to blank the screen between certain hours, skip the blank if debug is enabled
             if len(blankHours) == 2 and isRun(blankHours[0], blankHours[1]) and not config['debug']:
+                print(f"Screen blanked between {blankHours[0]} and {blankHours[1]}")
+                print(f"Time: {timeNow}")
                 device.clear()
                 time.sleep(10)
             else:
@@ -552,7 +554,7 @@ try:
                 if timeNow - timeAtStart >= config["refreshTime"]:
                     # check if debug mode is enabled 
                     if config["debug"] == True:
-                        print(config["debug"])
+                        print(f"Debug: {config['debug']}")
                         virtual = drawDebugScreen(device, width=widgetWidth, height=widgetHeight, showTime=True)
                         
                     else:
