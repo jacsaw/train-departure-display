@@ -269,6 +269,7 @@ def loadData(apiConfig, journeyConfig, config):
         runHours = [int(x) for x in apiConfig['operatingHours'].split('-')]
 
     # need to fix time in between since it assumes UTC TZ (in London)
+    # There's almost always a train, so no need for out of hours time...
     # if len(runHours) == 2 and isRun(runHours[0], runHours[1]) is False:
     #     return False, False, journeyConfig['outOfHoursName']
 
