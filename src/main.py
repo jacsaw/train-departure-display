@@ -31,6 +31,8 @@ WEATHER_DOT_GOV_URL = "https://forecast.weather.gov/MapClick.php?lat=41.5053&lon
 
 def is_time_between(begin_time, end_time, check_time=None):
     # If check time is not given, default to current UTC time
+    datetime_time = datetime.now().time()
+    whenever.ZonedDateTime.from_timestamp(departure["departure_time"], tz="America/New_York")
     check_time = check_time or datetime.now().time()
     if begin_time < end_time:
         return check_time >= begin_time and check_time <= end_time
@@ -265,8 +267,9 @@ def loadData(apiConfig, journeyConfig, config):
     if config['hoursPattern'].match(apiConfig['operatingHours']):
         runHours = [int(x) for x in apiConfig['operatingHours'].split('-')]
 
-    if len(runHours) == 2 and isRun(runHours[0], runHours[1]) is False:
-        return False, False, journeyConfig['outOfHoursName']
+    # need to fix time in between since it assumes UTC TZ (in London)
+    # if len(runHours) == 2 and isRun(runHours[0], runHours[1]) is False:
+    #     return False, False, journeyConfig['outOfHoursName']
 
     # set rows to 10 (max allowed) to get as many departure as poss
     # leaving as a variable so this can be updated if the API does
