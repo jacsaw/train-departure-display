@@ -7,6 +7,7 @@ import whenever
 
 from datetime import datetime
 from datetime import time as datetime_time
+import time as pytime
 from PIL import ImageFont, Image, ImageDraw
 
 from trains import loadDeparturesForStation
@@ -31,9 +32,9 @@ WEATHER_DOT_GOV_URL = "https://forecast.weather.gov/MapClick.php?lat=41.5053&lon
 
 def is_time_between(begin_time, end_time, check_time=None):
     # If check time is not given, default to current UTC time
-    datetime_time = datetime.now().time()
-    whenever.ZonedDateTime.from_timestamp(departure["departure_time"], tz="America/New_York")
-    check_time = check_time or datetime.now().time()
+    
+    whenever.ZonedDateTime.from_timestamp(pytime.time(), tz="America/New_York")
+    check_time = check_time or whenever.ZonedDateTime.from_timestamp(py_time.time(), tz="America/New_York").py_datetime().time()
     if begin_time < end_time:
         return check_time >= begin_time and check_time <= end_time
     else:  # crosses midnight
